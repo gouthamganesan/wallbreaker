@@ -1,0 +1,14 @@
+# Asserts the share flow's visual contract. Maestro can't send an ACTION_SEND
+# intent itself, so the trigger stays adb; run this immediately after firing:
+#   adb shell am start -n dev.goutham.wallbreaker/.ShareActivity \
+#     -a android.intent.action.SEND -t text/plain \
+#     --es android.intent.extra.TEXT "'https://medium.com/@author/post'" \
+#     && ~/.maestro/bin/maestro test .maestro/share-assert.yaml
+appId: dev.goutham.wallbreaker
+---
+- extendedWaitUntil:
+    visible: "Saved to Instapaper"
+    timeout: 20000
+- extendedWaitUntil:
+    notVisible: "Saved to Instapaper"
+    timeout: 6000        # fails if the card is still there after the ~3s auto-dismiss window
