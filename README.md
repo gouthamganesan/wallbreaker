@@ -10,6 +10,7 @@
 [![minSdk](https://img.shields.io/badge/minSdk-29-2ea44f?style=flat-square)](https://apilevels.com)
 [![targetSdk](https://img.shields.io/badge/targetSdk-36-2ea44f?style=flat-square)](https://apilevels.com)
 <br>
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-14%20passing-2ea44f?style=flat-square)](#-build--test)
 [![Dependencies](https://img.shields.io/badge/dependencies-4-lightgrey?style=flat-square)](app/build.gradle.kts)
 [![Instapaper](https://img.shields.io/badge/Instapaper-Simple%20API-1F1F1F?style=flat-square)](https://www.instapaper.com/developers/v1/simple-api)
@@ -176,3 +177,7 @@ Two endpoints, one content type, form-encoded bodies. On Android `HttpURLConnect
 - [**Instapaper**](https://www.instapaper.com) and its refreshingly simple [Simple API](https://www.instapaper.com/developers/v1/simple-api).
 
 Logos belong to their respective owners and are used here to identify the services this app talks to. Wallbreaker is an unaffiliated personal utility.
+
+## 📄 License
+
+[MIT](LICENSE) © Goutham Ganesan
