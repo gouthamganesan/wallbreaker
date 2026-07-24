@@ -1,0 +1,18 @@
+%% Regenerate:  npx -y @mermaid-js/mermaid-cli@11 -i docs/flow.mmd -o docs/flow.png -c docs/mermaid-theme.json -b '#fbfaf7' -s 3
+%% Rendered to a committed PNG rather than an inline ```mermaid block:
+%% GitHub overlays a pan/zoom control cluster on live diagrams that clips
+%% whatever node the flow ends on. A static image is never covered.
+flowchart LR
+    A["Any app<br/>Share → text/plain"]:::cap --> B["Wallbreaker<br/>share target"]:::cap
+    B --> C{"medium.com host<br/>+ 12-hex post id?"}:::sk
+    C -->|yes| D["Wrap via<br/>Freedium mirror"]:::fd
+    C -->|no| E["Keep URL as-is"]:::sk
+    D --> F["POST /api/add<br/>Instapaper Simple API"]:::ip
+    E --> F
+    F --> G["Saved card<br/>auto-dismiss 3s"]:::v
+
+    classDef cap fill:#eef1f5,stroke:#8a94a6,color:#1f2328
+    classDef fd  fill:#dff7f3,stroke:#12b3a1,color:#0f3d38
+    classDef ip  fill:#f3efe4,stroke:#3d3d3d,color:#2b2620
+    classDef sk  fill:#fdeae2,stroke:#d97757,color:#5c2e1c
+    classDef v   fill:#efe8fd,stroke:#7c3aed,color:#3b1d70
