@@ -37,13 +37,19 @@ No app to switch to, no browser detour, no clipboard. A small card confirms the 
 
 ```mermaid
 flowchart LR
-    A["📱 Any app<br/>Share → text/plain"] --> B["Wallbreaker<br/>share target"]
-    B --> C{"*.medium.com<br/>+ 12-hex slug?"}
-    C -->|yes| D["Wrap through<br/>freedium-mirror.cfd"]
-    C -->|no| E["Keep URL as-is"]
-    D --> F["POST /api/add<br/>Instapaper Simple API"]
+    A["Any app<br/>Share → text/plain"]:::cap --> B["Wallbreaker<br/>share target"]:::cap
+    B --> C{"medium.com host<br/>+ 12-hex post id?"}:::sk
+    C -->|yes| D["Wrap via<br/>Freedium mirror"]:::fd
+    C -->|no| E["Keep URL as-is"]:::sk
+    D --> F["POST /api/add<br/>Instapaper Simple API"]:::ip
     E --> F
-    F --> G["✅ 'Saved to Instapaper'<br/>auto-dismiss after 3s"]
+    F --> G["Saved card<br/>auto-dismiss 3s"]:::v
+
+    classDef cap fill:#eef1f5,stroke:#8a94a6,color:#1f2328
+    classDef fd  fill:#dff7f3,stroke:#12b3a1,color:#0f3d38
+    classDef ip  fill:#f3efe4,stroke:#3d3d3d,color:#2b2620
+    classDef sk  fill:#fdeae2,stroke:#d97757,color:#5c2e1c
+    classDef v   fill:#efe8fd,stroke:#7c3aed,color:#3b1d70
 ```
 
 Wrapping is **gated**, not blanket: Freedium only unlocks Medium articles, so anything else is saved untouched rather than turned into a broken link. That makes Wallbreaker a decent general-purpose Instapaper quick-saver too.
