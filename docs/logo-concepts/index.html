@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallbreaker — logo concepts</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 32px 64px;
+    background: #14100e; color: #F1DFDA;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: #A08C87; margin: 0 0 36px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+  .card { background: #221816; border: 1px solid #3a2c28; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .icons { display: flex; align-items: flex-start; gap: 20px; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .squircle { width: 112px; height: 112px; border-radius: 25%; overflow: hidden; flex: none; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  .circle { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; flex: none; }
+  .tiny { width: 44px; height: 44px; border-radius: 25%; overflow: hidden; flex: none; }
+  .col svg { width: 100%; height: 100%; display: block; }
+  .label { font-size: 11px; color: #A08C87; margin-top: 6px; }
+  .name { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .num { color: #FF8D77; font-weight: 700; }
+  .why { font-size: 13.5px; line-height: 1.5; color: #D8C2BD; margin: 0; }
+</style>
+</head>
+<body>
+  <h1>Wallbreaker — 5 logo concepts</h1>
+  <p class="sub">Each shown as a squircle (Android/iOS mask), a circle mask, and at 44px to check small-size legibility.</p>
+  <div class="grid" id="grid"></div>
+<script>
+  const S = {
+    breach: `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wb1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDF7EC"/><stop offset="0.6" stop-color="#FAEEDA"/><stop offset="1" stop-color="#F5BE62"/></linearGradient></defs><rect width="512" height="512" fill="#E8503A"/><path d="M218 180 H324 V244 H306 V332 H340 V420 H316 V512 H196 V436 H212 V352 H188 V260 H218 Z" fill="url(#wb1)"/><rect x="352" y="286" width="16" height="16" rx="3" transform="rotate(18 360 294)" fill="#F9E9CF"/><rect x="158" y="300" width="12" height="12" rx="3" transform="rotate(-14 164 306)" fill="#F9E9CF"/><rect x="336" y="168" width="10" height="10" rx="2" transform="rotate(24 341 173)" fill="#F9E9CF"/></svg>`,
+    through: `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" fill="#F8F1E6"/><rect x="118" y="181" width="134" height="30" rx="15" fill="#3A1E15"/><rect x="118" y="301" width="134" height="30" rx="15" fill="#3A1E15"/><path d="M264 241 H133 A15 15 0 0 0 133 271 H264 Z" fill="#3A1E15"/><rect x="252" y="241" width="120" height="30" fill="#F2A33C"/><path d="M366 214 L420 256 L366 298 Z" fill="#F2A33C"/><rect x="270" y="112" width="72" height="120" rx="18" fill="#E8503A"/><rect x="258" y="280" width="72" height="124" rx="18" fill="#E8503A"/><rect x="354" y="196" width="14" height="14" rx="3" transform="rotate(20 361 203)" fill="#E8503A"/><rect x="348" y="310" width="10" height="10" rx="2" transform="rotate(-16 353 315)" fill="#E8503A"/></svg>`,
+    swing: `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" fill="#F8F1E6"/><path d="M316 0 H512 V512 H316 V390 L352 376 L390 314 L386 262 L354 214 L316 196 Z" fill="#E8503A"/><path d="M204 -10 L276 272" stroke="#3A1E15" stroke-width="18" stroke-linecap="round" fill="none"/><circle cx="282" cy="296" r="76" fill="#3A1E15"/><circle cx="254" cy="268" r="17" fill="#F8F1E6" opacity="0.25"/><path d="M150 236 Q166 320 224 376" stroke="#E8503A" stroke-width="14" stroke-linecap="round" fill="none"/><path d="M196 300 Q208 352 246 390" stroke="#E8503A" stroke-width="11" stroke-linecap="round" fill="none"/><rect x="344" y="158" width="20" height="20" rx="4" transform="rotate(18 354 168)" fill="#F2A33C"/><rect x="366" y="196" width="12" height="12" rx="3" transform="rotate(-12 372 202)" fill="#F8F1E6"/></svg>`,
+    peel: `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" fill="#F8F1E6"/><rect x="140" y="136" width="176" height="40" rx="11" fill="#3A1E15"/><rect x="140" y="196" width="148" height="26" rx="13" fill="#3A1E15"/><rect x="140" y="242" width="108" height="26" rx="13" fill="#3A1E15"/><rect x="140" y="288" width="64" height="26" rx="13" fill="#3A1E15"/><path d="M512 48 L512 512 L48 512 Z" fill="#E8503A"/><path d="M512 48 L48 512" stroke="#C8402C" stroke-width="9" fill="none"/><path d="M380 180 Q414 292 366 366 Q292 414 180 380 Z" fill="#A93524"/></svg>`,
+    w: `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" fill="#2C150E"/><rect x="108" y="152" width="106" height="44" rx="22" fill="#E8503A"/><rect x="297" y="144" width="101" height="44" rx="22" fill="#E8503A"/><path d="M148 224 L200 384 L256 136 L312 384 L364 224" fill="none" stroke="#F6EEDF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/><rect x="286" y="96" width="16" height="16" rx="3" transform="rotate(22 294 104)" fill="#E8503A"/><rect x="214" y="104" width="11" height="11" rx="2" transform="rotate(-18 219 109)" fill="#F2A33C"/></svg>`,
+  };
+  const concepts = [
+    ["1","The Breach", S.breach, "The wall is negative space — a stepped, brick-shaped gap of warm light punched through a solid coral field."],
+    ["2","Throughline", S.through, "Three article lines meet the paywall and one bursts through the gap into an amber arrow — text set free."],
+    ["3","Swing", S.swing, "A pendulum wrecking ball takes a clean bite out of the paywall slab. Playful demolition as pure geometry."],
+    ["4","The Peel", S.peel, "The paywall is a coral sheet peeled away like a page corner, revealing the article beneath. Unlocking as unveiling."],
+    ["5","Breakout W", S.w, "A bold duotone monogram: the W drives its centre peak up through the coral bar and splits it apart."],
+  ];
+  const grid = document.getElementById("grid");
+  for (const [num,name,svg,why] of concepts) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML =
+      '<div class="icons">' +
+        '<div class="col"><div class="squircle">'+svg+'</div><div class="label">squircle</div></div>' +
+        '<div class="col"><div class="circle">'+svg+'</div><div class="label">circle</div></div>' +
+        '<div class="col"><div class="tiny">'+svg+'</div><div class="label">44px</div></div>' +
+      '</div>' +
+      '<div class="name"><span class="num">'+num+'.</span> '+name+'</div>' +
+      '<p class="why">'+why+'</p>';
+    grid.appendChild(card);
+  }
+</script>
+</body>
+</html>

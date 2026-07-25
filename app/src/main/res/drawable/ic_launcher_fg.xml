@@ -1,24 +1,26 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-  <path android:fillColor="#FFFFFF" android:pathData="M30.80,36.00 h9.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-9.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M46.80,36.00 h2.90 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-2.90 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M64.30,36.00 h9.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-9.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M30.80,47.00 h1.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-1.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M38.80,47.00 h2.90 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-2.90 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M56.30,47.00 h9.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-9.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M72.30,47.00 h4.90 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-4.90 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M30.80,58.00 h9.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-9.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M46.80,58.00 h1.90 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-1.90 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M63.30,58.00 h9.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-9.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M30.80,69.00 h1.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-1.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M38.80,69.00 h3.90 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-3.90 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M57.30,69.00 h9.40 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-9.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <path android:fillColor="#FFFFFF" android:pathData="M73.30,69.00 h3.90 a1.80,1.80 0 0 1 1.80,1.80 v5.40 a1.80,1.80 0 0 1 -1.80,1.80 h-3.90 a1.80,1.80 0 0 1 -1.80,-1.80 v-5.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  <group android:rotation="15" android:pivotX="57" android:pivotY="31">
-    <path android:fillColor="#FFFFFF" android:pathData="M53.80,28.00 h6.40 a1.80,1.80 0 0 1 1.80,1.80 v2.40 a1.80,1.80 0 0 1 -1.80,1.80 h-6.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-2.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
-  </group>
-  <group android:rotation="-18" android:pivotX="45" android:pivotY="32">
-    <path android:fillColor="#FFFFFF" android:pathData="M42.80,29.00 h4.40 a1.80,1.80 0 0 1 1.80,1.80 v2.40 a1.80,1.80 0 0 1 -1.80,1.80 h-4.40 a1.80,1.80 0 0 1 -1.80,-1.80 v-2.40 a1.80,1.80 0 0 1 1.80,-1.80 z"/>
+    android:viewportWidth="512" android:viewportHeight="512">
+  <!-- "Throughline": article lines meet the split coral wall; one line bursts
+       through the gap into an amber arrow. Scaled to 0.88 to sit inside the
+       adaptive-icon safe zone (paper background lives in the background layer). -->
+  <group android:scaleX="0.88" android:scaleY="0.88" android:pivotX="256" android:pivotY="256">
+    <!-- dark article lines -->
+    <path android:fillColor="#3A1E15" android:pathData="M133,181 H237 A15,15 0 0 1 252,196 A15,15 0 0 1 237,211 H133 A15,15 0 0 1 118,196 A15,15 0 0 1 133,181 Z"/>
+    <path android:fillColor="#3A1E15" android:pathData="M133,301 H237 A15,15 0 0 1 252,316 A15,15 0 0 1 237,331 H133 A15,15 0 0 1 118,316 A15,15 0 0 1 133,301 Z"/>
+    <path android:fillColor="#3A1E15" android:pathData="M264,241 H133 A15,15 0 0 0 133,271 H264 Z"/>
+    <!-- the breakthrough line + arrow, in amber -->
+    <path android:fillColor="#F2A33C" android:pathData="M252,241 H372 V271 H252 Z"/>
+    <path android:fillColor="#F2A33C" android:pathData="M366,214 L420,256 L366,298 Z"/>
+    <!-- the split coral wall halves -->
+    <path android:fillColor="#E8503A" android:pathData="M288,112 H324 A18,18 0 0 1 342,130 V214 A18,18 0 0 1 324,232 H288 A18,18 0 0 1 270,214 V130 A18,18 0 0 1 288,112 Z"/>
+    <path android:fillColor="#E8503A" android:pathData="M276,280 H312 A18,18 0 0 1 330,298 V386 A18,18 0 0 1 312,404 H276 A18,18 0 0 1 258,386 V298 A18,18 0 0 1 276,280 Z"/>
+    <!-- knocked-loose brick sparks -->
+    <group android:rotation="20" android:pivotX="361" android:pivotY="203">
+      <path android:fillColor="#E8503A" android:pathData="M357,196 H365 A3,3 0 0 1 368,199 V207 A3,3 0 0 1 365,210 H357 A3,3 0 0 1 354,207 V199 A3,3 0 0 1 357,196 Z"/>
+    </group>
+    <group android:rotation="-16" android:pivotX="353" android:pivotY="315">
+      <path android:fillColor="#E8503A" android:pathData="M350,310 H356 A2,2 0 0 1 358,312 V318 A2,2 0 0 1 356,320 H350 A2,2 0 0 1 348,318 V312 A2,2 0 0 1 350,310 Z"/>
+    </group>
   </group>
 </vector>

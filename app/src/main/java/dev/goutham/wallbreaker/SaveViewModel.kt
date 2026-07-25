@@ -1,7 +1,7 @@
 package dev.goutham.wallbreaker
 
 import android.content.Context
-import android.util.Log
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,85 +10,87 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** App-lifetime scope: the POST must survive early dismissal of the 3-second overlay. */
+/** App-lifetime scope: the local save must finish even if the overlay is dismissed early. */
 private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 sealed interface SaveState {
-    data object Saving : SaveState
-    data class Saved(val title: String?) : SaveState
-    data object NoUrl : SaveState
-    data object NoCredentials : SaveState
-    data class Failed(
-        val message: String,
-        val credsProblem: Boolean = false,
-        val retriable: Boolean = false,
-    ) : SaveState
+    data object Working : SaveState
+    data class Saved(val title: String?, val host: String?, val viaFreedium: Boolean) : SaveState
+    data object NoCredentials : SaveState          // no Instapaper account at all
+    data object NeedsFullApi : SaveState           // HTML file shared, but no API keys
+    data class Unusable(val message: String) : SaveState
 }
 
+/**
+ * The share path is now local-first: extract the payload, route it, write the
+ * receipt to the local store, and schedule background sync — then the overlay
+ * shows "Saved" immediately. The actual Instapaper POST happens in [SyncWorker];
+ * this view model never blocks on the network.
+ */
 class SaveViewModel : ViewModel() {
-    private val _state = MutableStateFlow<SaveState>(SaveState.Saving)
+    private val _state = MutableStateFlow<SaveState>(SaveState.Working)
     val state: StateFlow<SaveState> = _state
 
     private var started = false
-    private var sendUrl: String? = null
-    private var creds: Credentials? = null
 
-    fun start(context: Context, sharedText: String?) {
-        if (started) return           // idempotent across re-creation
+    fun start(context: Context, sharedText: String?, streamUri: Uri?, type: String?) {
+        if (started) return
         started = true
-        val appCtx = context.applicationContext
-        val url = UrlExtractor.firstUrl(sharedText)
-        if (url == null) {
-            _state.value = SaveState.NoUrl
-            return
-        }
+        val app = context.applicationContext
         appScope.launch {
-            val c = CredentialStore.load(appCtx)
-            if (c == null) {
+            if (CredentialStore.load(app) == null) {
                 _state.value = SaveState.NoCredentials
                 return@launch
             }
-            creds = c
-            // Wrap Medium articles through the Freedium mirror; pass anything
-            // else straight through (Freedium can't unlock non-Medium URLs).
-            sendUrl = Freedium.process(url)
-            post()
+            val payload = intake(app, sharedText, streamUri, type)
+            if (payload == null) {
+                _state.value = SaveState.Unusable("No link or HTML found in the share")
+                return@launch
+            }
+            when (val result = SendRouter.plan(app, payload)) {
+                is RouteResult.Ready -> {
+                    ShareRepository.createAndEnqueue(app, result.save)
+                    val via = result.save.route == Route.FREEDIUM_CONTENT ||
+                        result.save.route == Route.FREEDIUM_WRAP
+                    _state.value = SaveState.Saved(result.save.title, result.save.host, via)
+                }
+                RouteResult.NeedsFullApi -> _state.value = SaveState.NeedsFullApi
+                RouteResult.Unusable -> _state.value = SaveState.Unusable("Couldn't read the shared HTML")
+            }
         }
     }
 
-    /**
-     * A fresh share arrived on an already-live instance (rare: the OS reused
-     * this activity instead of creating a new one). Reset and process it as if
-     * new, so a second share is never silently dropped for a stale card.
-     */
-    fun restart(context: Context, sharedText: String?) {
+    /** A fresh share arrived on an already-live instance. Reset and process it. */
+    fun restart(context: Context, sharedText: String?, streamUri: Uri?, type: String?) {
         started = false
-        sendUrl = null
-        creds = null
-        _state.value = SaveState.Saving
-        start(context, sharedText)
+        _state.value = SaveState.Working
+        start(context, sharedText, streamUri, type)
     }
 
-    fun retry() {
-        _state.value = SaveState.Saving
-        appScope.launch { post() }
-    }
-
-    private fun post() {
-        val url = sendUrl ?: return
-        val c = creds ?: return
-        val result = InstapaperClient.add(c, url)
-        Log.i("Wallbreaker", "add -> $result")   // status + title only; never credentials
-        _state.value = when (result) {
-            is InstapaperClient.AddResult.Saved -> SaveState.Saved(result.title)
-            InstapaperClient.AddResult.BadCredentials ->
-                SaveState.Failed("Instapaper rejected your credentials", credsProblem = true)
-            InstapaperClient.AddResult.BadUrl ->
-                SaveState.Failed("Instapaper rejected the URL")
-            is InstapaperClient.AddResult.ServerError ->
-                SaveState.Failed("Instapaper error ${result.code}", retriable = true)
-            is InstapaperClient.AddResult.NetworkError ->
-                SaveState.Failed("Network error — are you online?", retriable = true)
+    /** Turn the raw intent extras into a [SharePayload], or null if unusable. */
+    private fun intake(context: Context, sharedText: String?, streamUri: Uri?, type: String?): SharePayload? {
+        // A shared HTML file arrives as a content: URI stream.
+        if (streamUri != null) {
+            val html = readStream(context, streamUri)
+            val looksHtml = type?.contains("html", ignoreCase = true) == true ||
+                html?.trimStart()?.startsWith("<") == true
+            if (!html.isNullOrBlank() && looksHtml) return SharePayload.Html(html)
         }
+        // A shared link arrives as plain text ("Title https://…").
+        UrlExtractor.firstUrl(sharedText)?.let { return SharePayload.Link(it) }
+        // Some apps paste raw HTML into EXTRA_TEXT.
+        val text = sharedText?.trim()
+        if (text != null && text.startsWith("<") && text.contains("</")) return SharePayload.Html(text)
+        return null
+    }
+
+    private fun readStream(context: Context, uri: Uri): String? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            input.reader(Charsets.UTF_8).readText().take(MAX_HTML_CHARS)
+        }
+    }.getOrNull()
+
+    private companion object {
+        const val MAX_HTML_CHARS = 4_000_000
     }
 }
