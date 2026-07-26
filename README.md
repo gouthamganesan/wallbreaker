@@ -101,6 +101,21 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew :app:installRelease       # build + install
 ```
 
+**Without an Android SDK** — CI containers, sandboxes, a machine with only a JDK:
+
+```bash
+./gradlew -p verify test             # the same 18 tests, Maven Central only
+```
+
+`verify/` is a standalone Gradle build (deliberately *not* included in the root
+project, whose `plugins {}` block resolves the Android Gradle Plugin even with
+`apply false`). It source-includes the app's Android-free files straight from
+`../app/src/main/java` and runs the same test files from `../app/src/test/java`
+— there is no second copy to drift. Because it compiles an explicit file list
+with no `android.jar` on the classpath, it also *enforces* that boundary: add an
+`import android.*` to `Freedium.kt`, `UrlExtractor.kt`, `HtmlMeta.kt`,
+`AppSettings.kt`, or `oauth/OAuthSigner.kt` and this build stops compiling.
+
 Fire the share target directly, no share sheet required:
 
 ```bash
@@ -117,7 +132,7 @@ End-to-end UI flows (share a link, share an HTML file, edit Freedium routing, ve
 
 ## 🗂 Architecture
 
-27 source files, two activities, no DI framework, ten dependencies.
+28 source files, two activities, no DI framework, ten dependencies.
 
 **Share flow**
 
@@ -140,7 +155,7 @@ End-to-end UI flows (share a link, share an HTML file, edit Freedium routing, ve
 | [`oauth/OAuthSigner.kt`](app/src/main/java/dev/goutham/wallbreaker/oauth/OAuthSigner.kt) | Pure OAuth 1.0a HMAC-SHA1 signer — cross-verified against known-answer headers |
 | [`FullApiAuth.kt`](app/src/main/java/dev/goutham/wallbreaker/FullApiAuth.kt) | Resolves/caches the OAuth token from stored consumer keys + account password |
 | [`CredentialStore.kt`](app/src/main/java/dev/goutham/wallbreaker/CredentialStore.kt) | Keystore AES-GCM storage for the password, consumer keys, and cached OAuth token |
-| [`AppSettings.kt`](app/src/main/java/dev/goutham/wallbreaker/AppSettings.kt) | Non-secret config: Freedium on/off, mirror base, domain allowlist |
+| [`AppSettings.kt`](app/src/main/java/dev/goutham/wallbreaker/AppSettings.kt) / [`AppSettingsStore.kt`](app/src/main/java/dev/goutham/wallbreaker/AppSettingsStore.kt) | Non-secret config: Freedium on/off, mirror base, domain allowlist. The value type is Android-free so the routing rules stay JVM-testable; SharedPreferences lives in the store |
 
 **Local-first store**
 
