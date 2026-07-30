@@ -10,10 +10,14 @@ import java.net.URI
  *     is a configurable, ordered fallback chain, never a hardcoded literal.
  *     When the head dies, move a live mirror to the front (one-line change).
  *
- *  2. Freedium only unlocks *.medium.com articles (URLs ending in Medium's
- *     12-hex-char post id). Wrapping anything else yields a broken save, so
- *     wrapping is GATED: Medium articles get wrapped, everything else is saved
- *     as-is.
+ *  2. Freedium only unlocks Medium-hosted articles, so wrapping is GATED — but
+ *     the gate is **exactly the domain allowlist in Settings, and nothing
+ *     else**. There is deliberately no additional "looks like a Medium URL"
+ *     heuristic hiding behind it. An earlier version also routed any URL whose
+ *     slug carried Medium's 12-hex post id, which meant links went through a
+ *     third-party mirror without appearing anywhere in the user's list — the
+ *     one thing a visible allowlist exists to prevent. If a domain should be
+ *     unlocked, it is in the list; if it isn't in the list, it is saved as-is.
  *
  * Wrapping rule: BASE + "/" + rawURL — scheme kept, inner URL NOT
  * percent-encoded (form-encoding of the whole value happens later, in the
@@ -29,24 +33,11 @@ object Freedium {
 
     val base: String get() = BASES.first()
 
-    // Medium article URLs end in a 12-hex-char post id: ...-1a2b3c4d5e6f
-    private val MEDIUM_SLUG = Regex("""-[0-9a-f]{12}(?:$|[/?#])""")
-
     private fun hostOf(url: String): String? = try {
         URI(url).host?.lowercase()
     } catch (e: Exception) {
         null
     }
-
-    /** True iff [url] is a *.medium.com article Freedium can actually unlock. */
-    fun looksLikeMediumArticle(url: String): Boolean {
-        val host = hostOf(url) ?: return false
-        val isMedium = host == "medium.com" || host.endsWith(".medium.com")
-        return isMedium && MEDIUM_SLUG.containsMatchIn(url)
-    }
-
-    /** True iff [url]'s path carries Medium's 12-hex post-id fingerprint. */
-    fun hasMediumSlug(url: String): Boolean = MEDIUM_SLUG.containsMatchIn(url)
 
     /** True iff [url]'s host equals or is a subdomain of any allowlisted domain. */
     fun matchesAllowlist(url: String, domains: List<String>): Boolean {
@@ -65,15 +56,14 @@ object Freedium {
     }
 
     /**
-     * The routing decision, honouring user settings. A link is routed through
-     * Freedium iff routing is enabled, it isn't already a mirror URL, and either
-     * its domain is on the allowlist OR it carries Medium's post-id slug (which
-     * catches custom-domain Medium publications the user hasn't listed).
+     * The routing decision, and the *only* one. A link goes through Freedium
+     * iff routing is enabled, it isn't already a mirror URL, and its domain is
+     * on the user's allowlist. What Settings shows is exactly what gets routed.
      */
     fun shouldRoute(url: String, settings: AppSettings): Boolean {
         if (!settings.freediumEnabled) return false
         if (isAtMirror(url, settings.freediumMirror)) return false
-        return matchesAllowlist(url, settings.freediumDomains) || hasMediumSlug(url)
+        return matchesAllowlist(url, settings.freediumDomains)
     }
 
     /** BASE + "/" + rawURL, scheme kept, inner URL left raw. */
@@ -81,9 +71,6 @@ object Freedium {
 
     /** [base] + "/" + rawURL, scheme kept, inner URL left raw. */
     fun wrap(url: String, base: String): String = base.trimEnd('/') + "/" + url
-
-    /** Wrap Medium articles; pass everything else through untouched. */
-    fun process(url: String): String = if (looksLikeMediumArticle(url)) wrap(url) else url
 
     // Freedium stamps its own name into the page <title>: "Real Title - Freedium".
     private val MIRROR_SUFFIX = Regex("""\s*[-–—|]\s*Freedium\s*$""", RegexOption.IGNORE_CASE)

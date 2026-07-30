@@ -16,20 +16,32 @@ data class AppSettings(
     companion object {
         const val DEFAULT_MIRROR = "https://freedium-mirror.cfd"
 
-        // Mirrors the Chrome extension's DEFAULT_WRAP_DOMAINS (lib/freedium.js):
-        // Medium proper plus the known custom-domain publications Freedium can
-        // unlock. Suffix-matched, so "medium.com" also covers *.medium.com.
-        // towardsdatascience.com is deliberately absent — it left Medium in
-        // Feb 2025 and Freedium won't unwrap it. Users can remove any of these.
+        /**
+         * What a *fresh install* starts with, shown in Settings from the first
+         * launch. Not a second allowlist: the moment anything is stored, the
+         * stored set is the only thing routing consults, and an entry removed
+         * here never comes back on its own.
+         *
+         * Medium proper plus the custom-domain publications it still hosts.
+         * Suffix-matched, so "medium.com" also covers *.medium.com.
+         *
+         * Every entry was checked against the live site (2026-07-30) rather
+         * than copied from the Chrome extension's list: a Medium-hosted domain
+         * still serves Medium's client bundle and appends Medium's `?gi=` param
+         * on load. Publications that have since moved off Medium are dropped,
+         * because Freedium cannot unlock what Medium no longer serves —
+         * listing them would route a link through a third-party mirror for
+         * nothing. Removed on that evidence: plainenglish.io and
+         * medium.freecodecamp.org (both now self-hosted), and
+         * towardsdatascience.com (left Medium in Feb 2025).
+         */
         val DEFAULT_DOMAINS = listOf(
             "medium.com",
             "betterprogramming.pub",
             "levelup.gitconnected.com",
-            "plainenglish.io",
             "blog.devgenius.io",
             "infosecwriteups.com",
             "uxdesign.cc",
-            "medium.freecodecamp.org",
         )
     }
 }
