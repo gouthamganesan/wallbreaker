@@ -80,8 +80,28 @@ class FreediumWrapTest {
         // Freedium can only unlock Medium-served pages, so a publication that
         // has moved off Medium must not be here — routing it through the mirror
         // would achieve nothing. Verified against the live sites 2026-07-30.
-        for (moved in listOf("plainenglish.io", "medium.freecodecamp.org", "towardsdatascience.com")) {
+        for (moved in listOf(
+            "plainenglish.io", "medium.freecodecamp.org", "towardsdatascience.com",
+            "hackernoon.com", "productcoalition.com", "thebolditalic.com",
+            "blog.coffeeapplied.com",   // expired and re-registered; now redirects to spam
+        )) {
             assertFalse("$moved no longer runs on Medium", AppSettings.DEFAULT_DOMAINS.contains(moved))
         }
+    }
+
+    @Test fun `plainenglish subdomains are listed without their non-Medium parent`() {
+        // Suffix matching means listing "plainenglish.io" would also capture the
+        // bare site, which left Medium — so only the Medium-hosted subdomains
+        // are allowed to route.
+        assertTrue(AppSettings.DEFAULT_DOMAINS.contains("javascript.plainenglish.io"))
+        assertFalse(AppSettings.DEFAULT_DOMAINS.contains("plainenglish.io"))
+
+        val s = settings(*AppSettings.DEFAULT_DOMAINS.toTypedArray())
+        assertTrue(Freedium.shouldRoute("https://python.plainenglish.io/a-post-1a2b3c4d5e6f", s))
+        assertFalse(Freedium.shouldRoute("https://plainenglish.io/a-post", s))
+    }
+
+    @Test fun `no duplicates in the shipped defaults`() {
+        assertEquals(AppSettings.DEFAULT_DOMAINS.size, AppSettings.DEFAULT_DOMAINS.toSet().size)
     }
 }

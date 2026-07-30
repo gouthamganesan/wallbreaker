@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +63,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.goutham.wallbreaker.AppSettingsStore
+import dev.goutham.wallbreaker.Freedium
 import dev.goutham.wallbreaker.Route
 import dev.goutham.wallbreaker.SyncStatus
 import dev.goutham.wallbreaker.db.ShareEntry
@@ -162,6 +165,7 @@ fun HistoryScreen(
             ActionSheet(
                 entry = entry,
                 onOpen = { openUrl(context, entry.url); sheetFor = null },
+                onOpenViaFreedium = { openUrl(context, freediumUrlFor(context, entry.url)); sheetFor = null },
                 onOpenInstapaper = { openInstapaper(context); sheetFor = null },
                 onCopy = { copy(context, entry.url); sheetFor = null },
                 onSaveAgain = { vm.retry(entry.id); sheetFor = null },
@@ -332,6 +336,7 @@ private fun NotConnectedBanner(onFix: () -> Unit) {
 private fun ActionSheet(
     entry: ShareEntry,
     onOpen: () -> Unit,
+    onOpenViaFreedium: () -> Unit,
     onOpenInstapaper: () -> Unit,
     onCopy: () -> Unit,
     onSaveAgain: () -> Unit,
@@ -346,6 +351,14 @@ private fun ActionSheet(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
         SheetAction(Icons.AutoMirrored.Outlined.OpenInNew, "Open article", onOpen)
+        // Offered for every entry, not just routed ones: the reason to reach for
+        // this is usually that the original turned out to be paywalled after all.
+        SheetAction(
+            Icons.Outlined.LockOpen,
+            "Open via Freedium",
+            onOpenViaFreedium,
+            subtitle = "Reads the unlocked version in your browser.",
+        )
         SheetAction(Icons.AutoMirrored.Outlined.OpenInNew, "Open in Instapaper", onOpenInstapaper)
         SheetAction(Icons.Outlined.ContentCopy, "Copy link", onCopy)
         SheetAction(Icons.Outlined.Refresh, "Save again", onSaveAgain)
@@ -464,16 +477,40 @@ private fun openUrl(context: Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
+/**
+ * The mirror URL for [url], using the mirror the user has configured. Already-
+ * wrapped links are returned as-is so the action is safe to hit twice.
+ */
+private fun freediumUrlFor(context: Context, url: String): String {
+    val mirror = AppSettingsStore.load(context).freediumMirror
+    return if (Freedium.isAtMirror(url, mirror)) url else Freedium.wrap(url, mirror)
+}
+
+/**
+ * Open the Instapaper *app*, falling back to the web only when it really isn't
+ * installed.
+ *
+ * There is deliberately no per-article deep link: Instapaper's Android build
+ * registers no http/https intent filter and no custom scheme (its only
+ * activities are MainActivity and a SEND/VIEW handler for text/plain and
+ * application/pdf), so `instapaper.com/read/<id>` resolves to a browser, not
+ * the app. Landing in the app's own list is the closest thing available.
+ */
 private fun openInstapaper(context: Context) {
     val pm = context.packageManager
-    val launch = pm.getLaunchIntentForPackage("com.instapaper.android")
-    if (launch != null) {
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(launch) }
-    } else {
-        openUrl(context, "https://www.instapaper.com/u")
-    }
+    val launch = pm.getLaunchIntentForPackage(INSTAPAPER_PKG)
+        // Belt and braces: if package visibility still hides the launch intent,
+        // an explicit component still starts an exported activity.
+        ?: Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            setClassName(INSTAPAPER_PKG, "$INSTAPAPER_PKG.MainActivity")
+        }
+    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val started = runCatching { context.startActivity(launch) }.isSuccess
+    if (!started) openUrl(context, "https://www.instapaper.com/u")
 }
+
+private const val INSTAPAPER_PKG = "com.instapaper.android"
 
 private fun copy(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

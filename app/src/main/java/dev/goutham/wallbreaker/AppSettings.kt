@@ -25,23 +25,51 @@ data class AppSettings(
          * Medium proper plus the custom-domain publications it still hosts.
          * Suffix-matched, so "medium.com" also covers *.medium.com.
          *
-         * Every entry was checked against the live site (2026-07-30) rather
-         * than copied from the Chrome extension's list: a Medium-hosted domain
-         * still serves Medium's client bundle and appends Medium's `?gi=` param
-         * on load. Publications that have since moved off Medium are dropped,
-         * because Freedium cannot unlock what Medium no longer serves —
-         * listing them would route a link through a third-party mirror for
-         * nothing. Removed on that evidence: plainenglish.io and
-         * medium.freecodecamp.org (both now self-hosted), and
-         * towardsdatascience.com (left Medium in Feb 2025).
+         * Freedium publishes no list of supported sites — it works by detecting
+         * Medium's canonical URL on a page — so this was built by taking the
+         * union of the community bypass extensions' domain lists (68 domains)
+         * and **checking every one against the live site on 2026-07-30**. A
+         * publication Medium still serves ships Medium's client bundle
+         * (cdn-client/miro/glyph.medium.com) and appends Medium's own `?gi=`
+         * param on load; 40 of the 68 did neither and were dropped. Those lists
+         * only ever accrete, and stale entries are not harmless — one of them,
+         * blog.coffeeapplied.com, has been re-registered and now redirects to a
+         * spam host.
+         *
+         * Note plainenglish.io: the bare domain left Medium, but its topic
+         * subdomains (javascript./python./aws.) are still Medium-hosted, so the
+         * subdomains are listed and the parent deliberately is not.
          */
         val DEFAULT_DOMAINS = listOf(
             "medium.com",
+            "aws.plainenglish.io",
+            "baos.pub",
+            "betterhumans.pub",
+            "bettermarketing.pub",
             "betterprogramming.pub",
-            "levelup.gitconnected.com",
             "blog.devgenius.io",
+            "blog.kubernauts.io",
+            "blog.prototypr.io",
+            "code.likeagirl.io",
+            "codeburst.io",
+            "entrepreneurshandbook.co",
+            "generativeai.pub",
             "infosecwriteups.com",
+            "itnext.io",
+            "javascript.plainenglish.io",
+            "levelup.gitconnected.com",
+            "medium.datadriveninvestor.com",
+            "medium.muz.li",
+            "netflixtechblog.com",
+            "proandroiddev.com",
+            "pub.towardsai.net",
+            "python.plainenglish.io",
+            "tech.olx.com",
+            "thebelladonnacomedy.com",
+            "themakingofamillionaire.com",
             "uxdesign.cc",
+            "uxplanet.org",
+            "writingcooperative.com",
         )
     }
 }
