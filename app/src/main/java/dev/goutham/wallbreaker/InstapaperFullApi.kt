@@ -163,6 +163,9 @@ object InstapaperFullApi {
             setRequestProperty("User-Agent", USER_AGENT)
         }
 
+        val contentLen = params["content"]?.length
+        WbLog.i("fullapi POST $path (bodyChars=${signed.body.length}${contentLen?.let { ", content=$it" } ?: ""})")
+
         val status: Int
         val text: String
         try {
@@ -171,10 +174,14 @@ object InstapaperFullApi {
             val stream = if (status in 200..299) conn.inputStream else conn.errorStream
             text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
         } catch (e: IOException) {
+            WbLog.w("fullapi $path network failure: ${e.javaClass.simpleName}: ${e.message}")
             throw InstapaperNetworkException(e.message)
         } finally {
             conn.disconnect()
         }
+
+        // xAuth's response body IS the token — never log it.
+        WbLog.i("fullapi $path -> HTTP $status${if (raw) "" else " " + WbLog.snippet(text)}")
 
         if (status !in 200..299) {
             val err = findErrorObject(text)

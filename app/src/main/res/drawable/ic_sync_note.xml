@@ -1,0 +1,11 @@
+<!-- Status-bar icon for the sync notification: the wall crack, flattened to a
+     single monochrome path (status-bar icons are tinted and alpha-only). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13.6,2 L6.4,12.2 L10.9,12.2 L9.3,22 L17.6,10.6 L12.7,10.6 Z" />
+</vector>

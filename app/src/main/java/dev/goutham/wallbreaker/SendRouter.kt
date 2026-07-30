@@ -68,6 +68,7 @@ object SendRouter {
             routed -> Route.FREEDIUM_WRAP
             else -> Route.SIMPLE_LINK
         }
+        WbLog.i("route ${UrlExtractor.host(url)} -> $route (freedium=$routed fullApi=$fullApi)")
         return RouteResult.Ready(
             PlannedSave(
                 url = url,

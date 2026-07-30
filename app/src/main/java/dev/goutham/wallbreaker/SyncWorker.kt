@@ -1,12 +1,20 @@
 package dev.goutham.wallbreaker
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -22,6 +30,12 @@ object SyncScheduler {
             .setInputData(workDataOf(KEY_ID to id))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+            // The share overlay disappears after 3s and aggressive OEM battery
+            // managers (Samsung's Freecess in particular) freeze the process the
+            // moment it stops being visible — mid-POST. Expedited work asks the
+            // system to run this NOW and, together with getForegroundInfo(),
+            // lets it run as a short foreground service so the request survives.
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
         // One unique chain per entry: re-enqueuing REPLACEs so an explicit retry
         // supersedes any pending backoff attempt.
@@ -39,6 +53,19 @@ object SyncScheduler {
  * (network, 5xx, rate-limit) go back through WorkManager's exponential backoff;
  * terminal failures (bad credentials, bad URL) mark the row FAILED for the user
  * to fix.
+ *
+ * ### The one invariant that matters
+ *
+ * An article must never end up in Instapaper **twice**. Instapaper's add is
+ * idempotent by URL, so re-POSTing the *same* URL is always safe — but this
+ * worker can deliver a Freedium article under two different URLs: the canonical
+ * `medium.com/...` one (content upload) or the `freedium-mirror.cfd/...` one
+ * (Simple-API link save). Falling back from the first to the second after the
+ * first may already have landed is what produced duplicate bookmarks.
+ *
+ * So: the mirror-URL fallback is allowed **only when nothing can possibly have
+ * landed yet** — [ShareEntry.contentPosted] false and [ShareEntry.bookmarkId]
+ * null. Anything ambiguous retries the idempotent content POST instead.
  */
 class SyncWorker(appContext: Context, params: WorkerParameters) :
     CoroutineWorker(appContext, params) {
@@ -46,7 +73,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
     private val ctx = appContext
 
     private sealed interface Outcome {
-        data class Ok(val title: String?, val effectiveRoute: Route?) : Outcome
+        data class Ok(val title: String?, val bookmarkId: Long?) : Outcome
         data class Retry(val message: String) : Outcome
         data class Fail(val message: String) : Outcome
     }
@@ -55,19 +82,27 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
         val id = inputData.getLong(SyncScheduler.keyId(), -1L)
         if (id < 0L) return Result.failure()
         val entry = ShareRepository.get(ctx, id) ?: return Result.success()  // pruned/deleted
-        if (entry.status == SyncStatus.SYNCED.name) return Result.success()
+        if (entry.status == SyncStatus.SYNCED.name) {
+            WbLog.i("sync #$id already SYNCED, skipping")
+            return Result.success()
+        }
 
-        markSyncing(entry)
+        WbLog.i(
+            "sync #$id start route=${entry.route} attempt=$runAttemptCount host=${entry.host} " +
+                "posted=${entry.contentPosted} bookmark=${entry.bookmarkId ?: "-"}",
+        )
+        val working = markSyncing(entry)
 
-        return when (val outcome = send(entry)) {
+        return when (val outcome = send(working)) {
             is Outcome.Ok -> {
-                entry.contentRef?.let { ShareRepository.deleteContent(ctx, it) }
+                WbLog.i("sync #$id OK title=${outcome.title?.let { "\"$it\"" } ?: "(none)"} bookmark=${outcome.bookmarkId ?: "-"}")
+                working.contentRef?.let { ShareRepository.deleteContent(ctx, it) }
                 ShareRepository.update(
                     ctx,
-                    entry.copy(
+                    working.copy(
                         status = SyncStatus.SYNCED.name,
-                        route = outcome.effectiveRoute?.name ?: entry.route,
-                        title = outcome.title ?: entry.title,
+                        title = outcome.title ?: working.title,
+                        bookmarkId = outcome.bookmarkId ?: working.bookmarkId,
                         error = null,
                         contentRef = null,
                         updatedAt = now(),
@@ -78,28 +113,43 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
 
             is Outcome.Retry ->
                 if (runAttemptCount < MAX_ATTEMPTS) {
-                    ShareRepository.update(ctx, entry.copy(status = SyncStatus.PENDING.name, error = outcome.message, updatedAt = now()))
+                    WbLog.w("sync #$id retry (attempt $runAttemptCount): ${outcome.message}")
+                    ShareRepository.update(ctx, working.copy(status = SyncStatus.PENDING.name, error = outcome.message, updatedAt = now()))
                     Result.retry()
                 } else {
-                    ShareRepository.update(ctx, entry.copy(status = SyncStatus.FAILED.name, error = outcome.message, updatedAt = now()))
+                    WbLog.w("sync #$id giving up after $runAttemptCount attempts: ${outcome.message}")
+                    ShareRepository.update(ctx, working.copy(status = SyncStatus.FAILED.name, error = outcome.message, updatedAt = now()))
                     Result.failure()
                 }
 
             is Outcome.Fail -> {
-                ShareRepository.update(ctx, entry.copy(status = SyncStatus.FAILED.name, error = outcome.message, updatedAt = now()))
+                WbLog.w("sync #$id FAILED: ${outcome.message}")
+                ShareRepository.update(ctx, working.copy(status = SyncStatus.FAILED.name, error = outcome.message, updatedAt = now()))
                 Result.failure()
             }
         }
     }
 
-    private suspend fun markSyncing(entry: ShareEntry) {
-        ShareRepository.update(
-            ctx,
-            entry.copy(status = SyncStatus.SYNCING.name, attempts = entry.attempts + 1, updatedAt = now()),
+    /** Marks the row SYNCING and returns the row as it now stands on disk. */
+    private suspend fun markSyncing(entry: ShareEntry): ShareEntry {
+        val updated = entry.copy(
+            status = SyncStatus.SYNCING.name,
+            attempts = entry.attempts + 1,
+            updatedAt = now(),
         )
+        ShareRepository.update(ctx, updated)
+        return updated
     }
 
-    private fun send(entry: ShareEntry): Outcome {
+    /** Remember that a content POST is about to go out, before it does. */
+    private suspend fun markContentPosted(entry: ShareEntry): ShareEntry {
+        if (entry.contentPosted) return entry
+        val updated = entry.copy(contentPosted = true, updatedAt = now())
+        ShareRepository.update(ctx, updated)
+        return updated
+    }
+
+    private suspend fun send(entry: ShareEntry): Outcome {
         val route = runCatching { Route.valueOf(entry.route) }.getOrNull()
             ?: return Outcome.Fail("Unknown route")
         return when (route) {
@@ -128,26 +178,55 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
 
     // --- Full API: fetch Freedium HTML, upload under the original URL ------
 
-    private fun freediumContent(entry: ShareEntry): Outcome {
+    private suspend fun freediumContent(entry: ShareEntry): Outcome {
         val mirror = AppSettingsStore.load(ctx).freediumMirror
         val wrapped = Freedium.wrap(entry.url, mirror)
+        // True only while no delivery for this article can have landed yet.
+        val virgin = !entry.contentPosted && entry.bookmarkId == null
 
         // Full API app removed since enqueue → still deliver full text via the
         // mirror URL rather than the paywalled original.
-        val full = resolveFull() ?: return simpleAdd(wrapped)
+        val full = resolveFull() ?: return mirrorFallback(virgin, wrapped, "Full API no longer configured")
         if (full is FullResult.Retry) return Outcome.Retry(full.message)
         if (full is FullResult.Fail) return Outcome.Fail(full.message)
         val creds = (full as FullResult.Ok).creds
 
         val html = FreediumFetcher.fetch(wrapped)
-            ?: return simpleAdd(wrapped)   // fetch failed → save the mirror URL, still full text
+            ?: return mirrorFallback(virgin, wrapped, "Freedium fetch returned nothing")
 
-        return uploadContent(creds, url = entry.url, title = entry.title, html = html, fallbackUrl = wrapped)
+        // Instapaper does NOT crawl a bookmark you supply `content` for, so if we
+        // send no title it derives one from the uploaded HTML — and Freedium's
+        // <title> carries a "- Freedium" suffix. Sending the cleaned title is
+        // what keeps the mirror invisible in the Instapaper inbox.
+        val title = entry.title ?: Freedium.cleanTitle(HtmlMeta.title(html))
+
+        val posted = markContentPosted(entry)
+        return uploadContent(
+            creds,
+            url = posted.url,
+            title = title,
+            html = html,
+            fallbackUrl = if (virgin) wrapped else null,
+        )
+    }
+
+    /**
+     * Save the mirror URL instead — full text, just a mirror-shaped link. Only
+     * safe while [virgin]; otherwise a content upload may already be sitting in
+     * Instapaper under the canonical URL and this would be the duplicate.
+     */
+    private fun mirrorFallback(virgin: Boolean, wrapped: String, why: String): Outcome {
+        if (!virgin) {
+            WbLog.w("$why — but content was already POSTed for this entry; retrying instead of saving the mirror URL")
+            return Outcome.Retry(why)
+        }
+        WbLog.w("$why → falling back to a Simple-API save of the mirror URL")
+        return simpleAdd(wrapped)
     }
 
     // --- Full API: upload a shared raw-HTML file --------------------------
 
-    private fun htmlContent(entry: ShareEntry): Outcome {
+    private suspend fun htmlContent(entry: ShareEntry): Outcome {
         val full = resolveFull()
             ?: return Outcome.Fail("Add Instapaper API keys in Settings to save HTML")
         if (full is FullResult.Retry) return Outcome.Retry(full.message)
@@ -156,11 +235,17 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
 
         val ref = entry.contentRef ?: return Outcome.Fail("HTML content missing")
         val html = ShareRepository.readContent(ctx, ref) ?: return Outcome.Fail("HTML content missing")
-        return uploadContent(creds, url = entry.url, title = entry.title, html = html, fallbackUrl = null)
+        val posted = markContentPosted(entry)
+        return uploadContent(creds, url = posted.url, title = posted.title, html = html, fallbackUrl = null)
     }
 
-    /** Upload [html] as content under [url]; on a terminal content error fall
-     *  back to a Simple-API save of [fallbackUrl] when one is available. */
+    /**
+     * Upload [html] as content under [url]. [fallbackUrl] — a Simple-API save of
+     * a *different* URL — is only ever taken when the server explicitly rejected
+     * the request (an `error_code` proves nothing was created). An unparseable
+     * or truncated response is ambiguous, so it retries the idempotent POST
+     * rather than risking a second bookmark.
+     */
     private fun uploadContent(
         creds: FullCredentials,
         url: String,
@@ -169,14 +254,21 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
         fallbackUrl: String?,
     ): Outcome = try {
         val added = InstapaperFullApi.addBookmark(creds, url = url, title = title, content = html)
-        Outcome.Ok(added.title, null)
+        Outcome.Ok(added.title ?: title, added.bookmarkId.takeIf { it > 0L })
     } catch (e: InstapaperNetworkException) {
+        // The POST may or may not have reached Instapaper. Re-POSTing the same
+        // URL is idempotent, so retrying is always the safe answer here.
         Outcome.Retry(e.message ?: "Network error")
     } catch (e: InstapaperApiException) {
+        WbLog.w("content upload rejected: http=${e.httpStatus} code=${e.errorCode} ${e.message}")
         when {
             isAuthError(e) -> { FullApiAuth.invalidate(ctx); Outcome.Retry("Re-authenticating with Instapaper") }
             e.retryable -> Outcome.Retry(e.message)
-            fallbackUrl != null -> simpleAdd(fallbackUrl)   // content rejected → mirror URL
+            e.errorCode == null -> Outcome.Retry(e.message)   // ambiguous: don't risk a duplicate
+            fallbackUrl != null -> {
+                WbLog.w("content rejected with code ${e.errorCode} → saving the mirror URL instead")
+                simpleAdd(fallbackUrl)
+            }
             else -> Outcome.Fail(e.hint ?: e.message)
         }
     }
@@ -202,9 +294,56 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
     private fun isAuthError(e: InstapaperApiException): Boolean =
         e.httpStatus == 401 || e.httpStatus == 403
 
+    // --- foreground promotion (fallback only) ------------------------------
+
+    /**
+     * The primary defence against the process being frozen mid-request is that
+     * the share overlay stays on screen until the sync finishes — a visible
+     * activity means a foreground process, which no OEM battery manager will
+     * freeze. This exists for the case that isn't covered: the user swipes the
+     * card away, or the request outlives it.
+     *
+     * On API 31+ expedited work runs as an expedited job and never surfaces
+     * this notification; below 31 WorkManager needs a foreground service, and
+     * this is the notification it shows.
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        ensureChannel()
+        val note: Notification = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_sync_note)
+            .setContentTitle(ctx.getString(R.string.sync_notification_title))
+            .setContentText(ctx.getString(R.string.sync_notification_text))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(NOTIFICATION_ID, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(NOTIFICATION_ID, note)
+        }
+    }
+
+    private fun ensureChannel() {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        nm.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                ctx.getString(R.string.sync_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = ctx.getString(R.string.sync_channel_description)
+                setShowBadge(false)
+            },
+        )
+    }
+
     private fun now() = System.currentTimeMillis()
 
     companion object {
         private const val MAX_ATTEMPTS = 5
+        private const val CHANNEL_ID = "sync"
+        private const val NOTIFICATION_ID = 4201
     }
 }

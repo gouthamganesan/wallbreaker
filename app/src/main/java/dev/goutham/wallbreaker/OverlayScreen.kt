@@ -43,10 +43,13 @@ fun OverlayScreen(
     onDismiss: () -> Unit,
     onOpenSetup: () -> Unit,
 ) {
-    // Success self-dismisses after 3s; every other state waits for a human.
+    // A confirmed save has nothing left to protect, so it goes quickly. An
+    // unconfirmed one deliberately lingers: a visible card means a foreground
+    // process, and that is what stops the OS freezing the upload half-finished.
+    // Failures wait for a human. Tapping dismisses either at any time.
     LaunchedEffect(state) {
         if (state is SaveState.Saved) {
-            delay(3_000)
+            delay(if (state.confirmed) 1_600 else 7_000)
             onDismiss()
         }
     }
@@ -120,21 +123,45 @@ private fun Content(state: SaveState, onOpenSetup: () -> Unit, onDismiss: () -> 
         SaveState.Working -> Text("Saving…", fontWeight = FontWeight.Medium)
 
         is SaveState.Saved -> Column {
-            Text("Saved to Instapaper", fontWeight = FontWeight.SemiBold)
-            if (state.viaFreedium) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    RouteArrow(modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.tertiary)
-                    Text(
-                        "Unlocked via Freedium",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
-            } else {
-                (state.title ?: state.host)?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                when {
+                    state.wasAlreadySaved -> "Already in Instapaper"
+                    state.confirmed -> "Saved to Instapaper"
+                    else -> "Saving to Instapaper…"
+                },
+                fontWeight = FontWeight.SemiBold,
+            )
+            // The article title, once the delivery came back with one — it is the
+            // only proof on screen that the *right* thing landed.
+            val detail = state.title?.takeIf { it.isNotBlank() }
+            when {
+                detail != null ->
+                    Text(detail, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                state.viaFreedium ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        RouteArrow(modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.tertiary)
+                        Text(
+                            "Unlocked via Freedium",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                else -> state.host?.takeIf { it.isNotBlank() }?.let {
                     Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                 }
             }
+        }
+
+        is SaveState.Failed -> Column {
+            Text("Couldn't reach Instapaper", fontWeight = FontWeight.SemiBold)
+            Text(
+                state.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            TextButton(onClick = onDismiss) { Text("Close") }
         }
 
         SaveState.NoCredentials -> Column {

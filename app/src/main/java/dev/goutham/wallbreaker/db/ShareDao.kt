@@ -18,8 +18,15 @@ interface ShareDao {
     @Query("SELECT * FROM share_entries WHERE id = :id")
     suspend fun get(id: Long): ShareEntry?
 
+    // Re-sharing an article should refresh its receipt, not stack another row.
+    @Query("SELECT * FROM share_entries WHERE url = :url ORDER BY createdAt DESC LIMIT 1")
+    suspend fun findByUrl(url: String): ShareEntry?
+
     @Query("DELETE FROM share_entries WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM share_entries WHERE id = :id")
+    fun observe(id: Long): Flow<ShareEntry?>
 
     @Query("SELECT * FROM share_entries ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<ShareEntry>>

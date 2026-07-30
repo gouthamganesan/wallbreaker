@@ -38,7 +38,11 @@ object FreediumFetcher {
                 setRequestProperty("User-Agent", UA)
                 setRequestProperty("Accept", "text/html,application/xhtml+xml")
             }
-            if (conn.responseCode !in 200..299) return null
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                WbLog.w("freedium GET -> HTTP $code (giving up on content upload)")
+                return null
+            }
             conn.inputStream.use { input ->
                 val buf = ByteArray(16 * 1024)
                 val out = StringBuilder()
@@ -52,11 +56,14 @@ object FreediumFetcher {
                     total += n
                     if (total >= MAX_BYTES) break
                 }
+                WbLog.i("freedium GET -> HTTP $code, $total chars")
                 out.toString().ifBlank { null }
             }
         } catch (e: IOException) {
+            WbLog.w("freedium GET failed: ${e.javaClass.simpleName}: ${e.message}")
             null
         } catch (e: Exception) {
+            WbLog.w("freedium GET failed: ${e.javaClass.simpleName}: ${e.message}")
             null
         } finally {
             conn?.disconnect()

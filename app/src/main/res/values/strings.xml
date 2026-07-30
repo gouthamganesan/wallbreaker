@@ -2,4 +2,10 @@
 <resources>
     <string name="app_name">Wallbreaker</string>
     <string name="share_label">Save to Instapaper</string>
+
+    <!-- Shown only when a sync outlives the share card (see SyncWorker). -->
+    <string name="sync_channel_name">Saving articles</string>
+    <string name="sync_channel_description">Shown briefly while an article is being delivered to Instapaper.</string>
+    <string name="sync_notification_title">Saving to Instapaper</string>
+    <string name="sync_notification_text">Finishing up…</string>
 </resources>

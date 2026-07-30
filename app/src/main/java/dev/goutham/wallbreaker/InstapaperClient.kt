@@ -34,13 +34,16 @@ object InstapaperClient {
                     "url" to url,
                 ),
             )
-            when (val code = conn.responseCode) {
+            val code = conn.responseCode
+            WbLog.i("simple /api/add -> HTTP $code")
+            when (code) {
                 201 -> AddResult.Saved(conn.getHeaderField("X-Instapaper-Title"))
                 403 -> AddResult.BadCredentials
                 400 -> AddResult.BadUrl
                 else -> AddResult.ServerError(code)
             }
         } catch (e: IOException) {
+            WbLog.w("simple /api/add failed: ${e.javaClass.simpleName}: ${e.message}")
             AddResult.NetworkError(e.message)
         } finally {
             conn.disconnect()

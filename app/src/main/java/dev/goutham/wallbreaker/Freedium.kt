@@ -84,4 +84,19 @@ object Freedium {
 
     /** Wrap Medium articles; pass everything else through untouched. */
     fun process(url: String): String = if (looksLikeMediumArticle(url)) wrap(url) else url
+
+    // Freedium stamps its own name into the page <title>: "Real Title - Freedium".
+    private val MIRROR_SUFFIX = Regex("""\s*[-–—|]\s*Freedium\s*$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * The article title as the *original* publisher wrote it.
+     *
+     * Uploading Freedium's HTML as Instapaper `content` means Instapaper never
+     * crawls the real page, so whatever title we send is the title the user
+     * sees. Send Freedium's raw <title> and the mirror leaks into an inbox that
+     * otherwise looks untouched — the whole point of uploading content under
+     * the canonical URL was to keep it invisible.
+     */
+    fun cleanTitle(raw: String?): String? =
+        raw?.let { MIRROR_SUFFIX.replace(it, "") }?.trim()?.ifBlank { null }
 }
