@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +14,29 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** App-lifetime scope: the local save must finish even if the overlay is dismissed early. */
 private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+/**
+ * The share card's offer to put this save's domain on the Freedium allowlist.
+ *
+ * Present only on a save that went out unrouted and *could* have been routed —
+ * which is the one moment the user actually knows the domain needs it, and the
+ * one moment the app already has the domain in hand.
+ */
+data class UnlockOffer(
+    val domain: String,
+    /**
+     * Whether accepting also re-delivers *this* save unlocked, rather than only
+     * applying from the next link on. True only with the Full API configured:
+     * that route uploads the unlocked text under the article's canonical URL,
+     * and Instapaper's add is idempotent by URL, so the bookmark already in the
+     * inbox is upgraded in place. Without it the only available route saves the
+     * mirror URL — a different URL, therefore a second bookmark — so the offer
+     * quietly downgrades to "from now on".
+     */
+    val resaves: Boolean,
+    /** Set once accepted, when there is no re-save to show progress for. */
+    val accepted: Boolean = false,
+)
 
 sealed interface SaveState {
     data object Working : SaveState
@@ -24,6 +48,8 @@ sealed interface SaveState {
         val wasAlreadySaved: Boolean = false,
         /** Delivery is confirmed, not just queued. */
         val confirmed: Boolean = false,
+        /** Non-null when this save's domain could be added to the allowlist. */
+        val offer: UnlockOffer? = null,
     ) : SaveState
     data class Failed(val message: String) : SaveState
     data object NoCredentials : SaveState          // no Instapaper account at all
@@ -53,11 +79,17 @@ class SaveViewModel : ViewModel() {
 
     private var started = false
 
+    /** The in-flight share pipeline, so accepting an unlock offer can supersede it. */
+    private var job: Job? = null
+
+    /** The URL of the save on screen — what an accepted unlock offer re-routes. */
+    private var currentUrl: String? = null
+
     fun start(context: Context, sharedText: String?, streamUri: Uri?, type: String?) {
         if (started) return
         started = true
         val app = context.applicationContext
-        appScope.launch {
+        job = appScope.launch {
             if (CredentialStore.load(app) == null) {
                 _state.value = SaveState.NoCredentials
                 return@launch
@@ -75,7 +107,8 @@ class SaveViewModel : ViewModel() {
         }
     }
 
-    private suspend fun deliver(app: Context, save: PlannedSave) {
+    private suspend fun deliver(app: Context, save: PlannedSave, rerouted: Boolean = false) {
+        currentUrl = save.url
         val enqueued = ShareRepository.createAndEnqueue(app, save)
         val viaFreedium = save.route == Route.FREEDIUM_CONTENT || save.route == Route.FREEDIUM_WRAP
 
@@ -83,7 +116,9 @@ class SaveViewModel : ViewModel() {
             title = title,
             host = save.host,
             viaFreedium = viaFreedium,
-            wasAlreadySaved = enqueued.wasAlreadySaved,
+            // On a re-route the article is in Instapaper *because we just put it
+            // there*; reporting that back would answer a question nobody asked.
+            wasAlreadySaved = enqueued.wasAlreadySaved && !rerouted,
             confirmed = false,
         )
 
@@ -99,16 +134,65 @@ class SaveViewModel : ViewModel() {
                 title = settled.title ?: save.title,
                 host = save.host,
                 viaFreedium = viaFreedium,
-                wasAlreadySaved = enqueued.wasAlreadySaved,
+                wasAlreadySaved = enqueued.wasAlreadySaved && !rerouted,
                 confirmed = true,
+                // Deliberately only offered on a *confirmed* save. Re-routing
+                // republishes the article, and doing that while the first
+                // delivery is still in flight is how you end up racing your own
+                // POST — the one situation the idempotency record can't resolve.
+                offer = if (rerouted) null else unlockOffer(app, save),
             )
             else -> SaveState.Failed(settled.error ?: "Couldn't reach Instapaper")
         }
     }
 
+    /**
+     * The allowlist offer for a save that went out unrouted, or null.
+     *
+     * Only a plain link has anything to offer: the Freedium routes are already
+     * routed, and a shared HTML file is already full text (and carries a
+     * synthetic URL that has no real domain to add).
+     */
+    private fun unlockOffer(app: Context, save: PlannedSave): UnlockOffer? {
+        if (save.route != Route.SIMPLE_LINK) return null
+        val domain = Freedium.unlockCandidate(save.url, AppSettingsStore.load(app)) ?: return null
+        return UnlockOffer(domain = domain, resaves = CredentialStore.hasConsumerApp(app))
+    }
+
+    /**
+     * Allowlist this save's domain, and — when the Full API can do it without
+     * creating a second bookmark — re-deliver the article unlocked, in place.
+     */
+    fun acceptUnlockOffer(context: Context) {
+        val saved = _state.value as? SaveState.Saved ?: return
+        val offer = saved.offer?.takeIf { !it.accepted } ?: return
+        val url = currentUrl ?: return
+        val app = context.applicationContext
+
+        // Supersede the finished pipeline so its final assignment can't land on
+        // top of the re-route's.
+        job?.cancel()
+        job = appScope.launch {
+            AppSettingsStore.addDomain(app, offer.domain)
+            WbLog.i("allowlisted ${offer.domain} from the share card (resave=${offer.resaves})")
+            if (!offer.resaves) {
+                _state.value = saved.copy(offer = offer.copy(accepted = true))
+                return@launch
+            }
+            // Re-plan rather than assume the route: the allowlist is now the one
+            // that answers, and SendRouter is the only thing allowed to read it.
+            when (val result = SendRouter.plan(app, SharePayload.Link(url))) {
+                is RouteResult.Ready -> deliver(app, result.save, rerouted = true)
+                else -> _state.value = saved.copy(offer = offer.copy(accepted = true))
+            }
+        }
+    }
+
     /** A fresh share arrived on an already-live instance. Reset and process it. */
     fun restart(context: Context, sharedText: String?, streamUri: Uri?, type: String?) {
+        job?.cancel()
         started = false
+        currentUrl = null
         _state.value = SaveState.Working
         start(context, sharedText, streamUri, type)
     }

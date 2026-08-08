@@ -64,8 +64,14 @@ object SyncScheduler {
  * first may already have landed is what produced duplicate bookmarks.
  *
  * So: the mirror-URL fallback is allowed **only when nothing can possibly have
- * landed yet** — [ShareEntry.contentPosted] false and [ShareEntry.bookmarkId]
- * null. Anything ambiguous retries the idempotent content POST instead.
+ * landed yet** — [ShareEntry.contentPosted] false, [ShareEntry.bookmarkId] null,
+ * and [ShareEntry.delivered] false. Anything ambiguous retries the idempotent
+ * content POST instead.
+ *
+ * That third condition is not redundant. A Simple-API add answers with only an
+ * `X-Instapaper-Title` header, so a link that definitely landed carries no
+ * bookmark id — and re-routing it through Freedium later (adding its domain to
+ * the allowlist does exactly that) would otherwise look like a first delivery.
  */
 class SyncWorker(appContext: Context, params: WorkerParameters) :
     CoroutineWorker(appContext, params) {
@@ -89,7 +95,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
 
         WbLog.i(
             "sync #$id start route=${entry.route} attempt=$runAttemptCount host=${entry.host} " +
-                "posted=${entry.contentPosted} bookmark=${entry.bookmarkId ?: "-"}",
+                "posted=${entry.contentPosted} bookmark=${entry.bookmarkId ?: "-"} delivered=${entry.delivered}",
         )
         val working = markSyncing(entry)
 
@@ -103,6 +109,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
                         status = SyncStatus.SYNCED.name,
                         title = outcome.title ?: working.title,
                         bookmarkId = outcome.bookmarkId ?: working.bookmarkId,
+                        delivered = true,
                         error = null,
                         contentRef = null,
                         updatedAt = now(),
@@ -182,7 +189,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
         val mirror = AppSettingsStore.load(ctx).freediumMirror
         val wrapped = Freedium.wrap(entry.url, mirror)
         // True only while no delivery for this article can have landed yet.
-        val virgin = !entry.contentPosted && entry.bookmarkId == null
+        val virgin = !entry.contentPosted && entry.bookmarkId == null && !entry.delivered
 
         // Full API app removed since enqueue → still deliver full text via the
         // mirror URL rather than the paywalled original.

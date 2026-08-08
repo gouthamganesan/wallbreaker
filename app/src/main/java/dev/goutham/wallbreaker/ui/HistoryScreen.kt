@@ -161,13 +161,21 @@ fun HistoryScreen(
 
     sheetFor?.let { entry ->
         val sheetState = rememberModalBottomSheetState()
+        val bump by vm.allowlistBump.collectAsStateWithLifecycle()
+        // Re-read on every bump: the allowlist is SharedPreferences, so adding a
+        // domain from this very sheet is not otherwise observable.
+        val unlockDomain = remember(entry.id, bump) {
+            Freedium.unlockCandidate(entry.url, AppSettingsStore.load(context))
+        }
         ModalBottomSheet(onDismissRequest = { sheetFor = null }, sheetState = sheetState) {
             ActionSheet(
                 entry = entry,
+                unlockDomain = unlockDomain,
                 onOpen = { openUrl(context, entry.url); sheetFor = null },
                 onOpenViaFreedium = { openUrl(context, freediumUrlFor(context, entry.url)); sheetFor = null },
                 onOpenInstapaper = { openInstapaper(context); sheetFor = null },
                 onCopy = { copy(context, entry.url); sheetFor = null },
+                onUnlockDomain = { vm.unlockDomain(it) },
                 onSaveAgain = { vm.retry(entry.id); sheetFor = null },
                 onRemove = { vm.delete(entry); sheetFor = null },
             )
@@ -335,13 +343,19 @@ private fun NotConnectedBanner(onFix: () -> Unit) {
 @Composable
 private fun ActionSheet(
     entry: ShareEntry,
+    unlockDomain: String?,
     onOpen: () -> Unit,
     onOpenViaFreedium: () -> Unit,
     onOpenInstapaper: () -> Unit,
     onCopy: () -> Unit,
+    onUnlockDomain: (String) -> Unit,
     onSaveAgain: () -> Unit,
     onRemove: () -> Unit,
 ) {
+    // Survives [unlockDomain] going null the moment the domain is added, which is
+    // what lets the row report what it did instead of silently vanishing.
+    var added by remember(entry.id) { mutableStateOf<String?>(null) }
+
     Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
         Text(
             entry.title?.takeIf { it.isNotBlank() } ?: prettyUrl(entry.url),
@@ -359,6 +373,23 @@ private fun ActionSheet(
             onOpenViaFreedium,
             subtitle = "Reads the unlocked version in your browser.",
         )
+        // The standing fix, next to the one-off one. History is where you notice
+        // that a domain keeps needing this, rather than that one article did.
+        when {
+            added != null -> SheetAction(
+                Icons.Outlined.LockOpen,
+                "$added added",
+                onClick = {},
+                subtitle = "Links from this domain unlock from now on. \"Save again\" redelivers this one.",
+                enabled = false,
+            )
+            unlockDomain != null -> SheetAction(
+                Icons.Outlined.LockOpen,
+                "Always unlock $unlockDomain",
+                onClick = { added = unlockDomain; onUnlockDomain(unlockDomain) },
+                subtitle = "Adds it to the Freedium list in Settings.",
+            )
+        }
         SheetAction(Icons.AutoMirrored.Outlined.OpenInNew, "Open in Instapaper", onOpenInstapaper)
         SheetAction(Icons.Outlined.ContentCopy, "Copy link", onCopy)
         SheetAction(Icons.Outlined.Refresh, "Save again", onSaveAgain)
@@ -372,18 +403,24 @@ private fun SheetAction(
     label: String,
     onClick: () -> Unit,
     subtitle: String? = null,
+    enabled: Boolean = true,
 ) {
+    val tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary
     Row(
         Modifier
             .fillMaxWidth()
-            .combinedClickableNoLong(onClick)
+            .then(if (enabled) Modifier.combinedClickableNoLong(onClick) else Modifier)
             .padding(horizontal = 24.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(icon, contentDescription = null, tint = tint)
         Column {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.tertiary,
+            )
             if (subtitle != null) {
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

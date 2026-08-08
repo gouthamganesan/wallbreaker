@@ -107,11 +107,34 @@ object ShareRepository {
         return Enqueued(id, wasAlreadySaved = false)
     }
 
-    /** Re-schedule a failed/pending entry (used by "retry" in history). */
+    /**
+     * Re-schedule an entry — history's "Save again", and tapping a failed row.
+     *
+     * A link entry is **re-planned**, not merely re-queued: the allowlist may
+     * have gained its domain since the receipt was written (from Settings, or
+     * from the share card's one-tap offer), and a "save again" that replayed the
+     * stored route would quietly redeliver the same paywalled link while looking
+     * like it had done something. A raw-HTML entry keeps its route; its body is
+     * on disk and there is nothing to re-decide.
+     *
+     * [ShareEntry.delivered] is deliberately untouched. Whatever this entry
+     * delivered before is still in Instapaper, and that is exactly what stops
+     * the worker treating a re-route as a first delivery and saving the mirror
+     * URL alongside it.
+     */
     suspend fun retry(context: Context, id: Long) {
         val entry = dao(context).get(id) ?: return
+        val stored = runCatching { Route.valueOf(entry.route) }.getOrNull()
+        val route = if (stored == Route.HTML_CONTENT) {
+            entry.route
+        } else {
+            (SendRouter.plan(context, SharePayload.Link(entry.url)) as? RouteResult.Ready)
+                ?.save?.route?.name ?: entry.route
+        }
+        if (route != entry.route) WbLog.i("retry #$id re-planned ${entry.route} -> $route")
         dao(context).update(
             entry.copy(
+                route = route,
                 status = SyncStatus.PENDING.name,
                 error = null,
                 contentPosted = false,

@@ -9,12 +9,18 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,14 +48,28 @@ fun OverlayScreen(
     state: SaveState,
     onDismiss: () -> Unit,
     onOpenSetup: () -> Unit,
+    onUnlockDomain: () -> Unit = {},
 ) {
     // A confirmed save has nothing left to protect, so it goes quickly. An
     // unconfirmed one deliberately lingers: a visible card means a foreground
     // process, and that is what stops the OS freezing the upload half-finished.
     // Failures wait for a human. Tapping dismisses either at any time.
+    //
+    // A card carrying an unlock offer is the exception among confirmed saves. It
+    // is asking a question, and 1.6s is not long enough to read one, decide, and
+    // hit a target — measured against automation it wasn't even long enough to
+    // *find*. It only ever appears on links that went out still paywalled, so
+    // the extra seconds are spent on the saves that have something to say.
     LaunchedEffect(state) {
         if (state is SaveState.Saved) {
-            delay(if (state.confirmed) 1_600 else 7_000)
+            delay(
+                when {
+                    !state.confirmed -> 7_000
+                    state.offer?.accepted == false -> 6_000
+                    state.offer?.accepted == true -> 2_400
+                    else -> 1_600
+                },
+            )
             onDismiss()
         }
     }
@@ -96,7 +116,12 @@ fun OverlayScreen(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Leading(showBadge = showBadge && saved, crack = crack)
-                Content(state = state, onOpenSetup = onOpenSetup, onDismiss = onDismiss)
+                Content(
+                    state = state,
+                    onOpenSetup = onOpenSetup,
+                    onDismiss = onDismiss,
+                    onUnlockDomain = onUnlockDomain,
+                )
             }
         }
     }
@@ -117,8 +142,60 @@ private fun Leading(showBadge: Boolean, crack: Float) {
     }
 }
 
+/**
+ * The one-tap allowlist affordance, at the only moment the user actually knows
+ * the domain needs it — and on the one screen that already has the domain in
+ * hand. The alternative it replaces is: leave the app you were reading in, open
+ * Wallbreaker, find Settings, and retype what the card was holding.
+ *
+ * Once accepted with the Full API configured there is nothing to render: the
+ * card falls back into the ordinary save flow, and "Saving…" → "Unlocked via
+ * Freedium" tells the story better than a confirmation line would.
+ */
 @Composable
-private fun Content(state: SaveState, onOpenSetup: () -> Unit, onDismiss: () -> Unit) {
+private fun UnlockRow(offer: UnlockOffer, onAccept: () -> Unit) {
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    if (offer.accepted) {
+        Text(
+            "${offer.domain} added — unlocks from now on",
+            style = MaterialTheme.typography.bodySmall,
+            color = tertiary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
+    TextButton(
+        onClick = onAccept,
+        contentPadding = PaddingValues(vertical = 4.dp, horizontal = 0.dp),
+        modifier = Modifier.heightIn(min = 32.dp),
+    ) {
+        Icon(
+            Icons.Outlined.LockOpen,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = tertiary,
+        )
+        Spacer(Modifier.size(8.dp))
+        // No padding baked into the string: the label is also the accessibility
+        // node and the handle every UI test grabs it by.
+        Text(
+            "Always unlock ${offer.domain}",
+            style = MaterialTheme.typography.labelLarge,
+            color = tertiary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun Content(
+    state: SaveState,
+    onOpenSetup: () -> Unit,
+    onDismiss: () -> Unit,
+    onUnlockDomain: () -> Unit,
+) {
     when (state) {
         SaveState.Working -> Text("Saving…", fontWeight = FontWeight.Medium)
 
@@ -150,6 +227,7 @@ private fun Content(state: SaveState, onOpenSetup: () -> Unit, onDismiss: () -> 
                     Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                 }
             }
+            state.offer?.let { UnlockRow(offer = it, onAccept = onUnlockDomain) }
         }
 
         is SaveState.Failed -> Column {

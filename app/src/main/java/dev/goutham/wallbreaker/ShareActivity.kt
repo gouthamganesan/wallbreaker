@@ -28,6 +28,7 @@ class ShareActivity : ComponentActivity() {
                         startActivity(Intent(this, MainActivity::class.java))
                         finish()
                     },
+                    onUnlockDomain = { vm.acceptUnlockOffer(this) },
                 )
             }
         }

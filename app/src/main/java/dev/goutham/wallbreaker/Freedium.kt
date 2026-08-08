@@ -66,6 +66,27 @@ object Freedium {
         return matchesAllowlist(url, settings.freediumDomains)
     }
 
+    /**
+     * The domain [url] would have to be allowlisted under for it to route — or
+     * null when there is nothing to offer, because routing is off, the link is
+     * already a mirror URL, or its domain is already on the list.
+     *
+     * The inverse of [shouldRoute], and the reason the share card can offer a
+     * one-tap fix: at the moment a link is saved unrouted, the app already knows
+     * both the URL and the decision, so asking the user to retype the domain in
+     * Settings is asking for information it is holding.
+     *
+     * Normalised the same way Settings normalises a pasted link
+     * ([UrlExtractor.domainFromInput]), so the two entry points can never
+     * disagree about what "this domain" means.
+     */
+    fun unlockCandidate(url: String, settings: AppSettings): String? {
+        if (!settings.freediumEnabled) return null
+        if (isAtMirror(url, settings.freediumMirror)) return null
+        if (matchesAllowlist(url, settings.freediumDomains)) return null
+        return UrlExtractor.domainFromInput(url)
+    }
+
     /** BASE + "/" + rawURL, scheme kept, inner URL left raw. */
     fun wrap(url: String): String = wrap(url, base)
 
